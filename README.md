@@ -34,3 +34,28 @@
     </script>
 </body>
 </html>
+<script>
+        // This part looks at the link and finds the 'id'
+            const params = new URLSearchParams(window.location.search);
+                const tID = params.get('id'); 
+
+                    if (!tID) {
+                            document.body.innerHTML = "<h1>Please provide a tournament ID in the link.</h1>";
+                                } else {
+                                        loadData(tID);
+                                            }
+
+                                                async function loadData(id) {
+                                                        try {
+                                                                    const response = await fetch(`https://tournament-maker-8ca0a-default-rtdb.firebaseio.com/tournaments/${id}.json`);
+                                                                                const data = await response.json();
+                                                                                            if(!data) throw new Error("Not found");
+                                                                                                        
+                                                                                                                    document.getElementById('title').innerText = "🏆 " + data.name;
+                                                                                                                                // ... the rest of your display code ...
+                                                                                                                                        } catch(e) {
+                                                                                                                                                    document.getElementById('title').innerText = "Tournament Not Found";
+                                                                                                                                                            }
+                                                                                                                                                                }
+                                                                                                                                                                </script>
+                                                                                                                                                                
