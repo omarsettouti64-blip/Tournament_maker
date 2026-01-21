@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Viewer</title>
+    <style>
+        body { background: #0d1117; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding-bottom: 80px; }
+        .header { background: #161b22; padding: 20px; text-align: center; border-bottom: 1px solid #30363d; }
+        #content { padding: 15px; max-width: 600px; margin: auto; }
+        
+        /* Table Styles */
+        .table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; }
+        .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #30363d; }
+        
+        /* Color Coding Rules */
+        .direct-qualify { border-left: 5px solid #007bff; background: rgba(0, 123, 255, 0.1); }
+        .playin-qualify { border-left: 5px solid #ffc107; background: rgba(255, 193, 7, 0.1); }
+        .eliminated { border-left: 5px solid #dc3545; background: rgba(220, 53, 69, 0.1); }
+
+        /* Match Card Styles */
+        .match-card { background: #21262d; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d; }
+        .bracket-card { border-left: 5px solid #007bff; }
+
+        /* Bottom Navigation */
+        .nav-bar { position: fixed; bottom: 0; width: 100%; background: #161b22; display: flex; border-top: 1px solid #30363d; height: 65px; }
+        .nav-bar button { flex: 1; background: none; border: none; color: #8b949e; font-weight: bold; cursor: pointer; font-size: 12px; text-transform: uppercase; }
+        .nav-bar button:active { color: #58a6ff; background: rgba(88, 166, 255, 0.1); }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2 id="t-name">Loading Tournament...</h2>
+    </div>
+
+    <div id="content">
+        </div>
+
+    <div class="nav-bar" id="nav-bar">
+        </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const firebaseConfig = { databaseURL: "https://tournament-maker-8ca0a-default-rtdb.firebaseio.com/" };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const tId = urlParams.get('id');
+
+    if (tId) {
+        const tournamentRef = ref(db, 'tournaments/' + tId);
+        onValue(tournamentRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                window.currentTournamentData = data;
+                // Default view based on type
+                renderView(data.type === 'Playoffs' ? 'bracket' : 'league');
+            } else {
+                document.getElementById('t-name').innerText = "Tournament Not Found";
+            }
+        });
+    }
+
+    window.renderView = function(view) {
+        const data = window.currentTournamentData;
+        const content = document.getElementById('content');
+        const nav = document.getElementById('nav-bar');
+        document.getElementById('t-name').innerText = "🏆 " + data.name;
+
+        let html = "";
+        
+        // 1. RENDER CONTENT
+        if (view === 'league') {
+            html = `<h3>Standings</h3><table class="table">`;
+            const sorted = Object.entries(data.scores).sort((a,b) => b[1] - a[1]);
+            sorted.forEach(([name, pts], i) => {
+                let statusClass = "eliminated";
+                if (data.type === "League + Playoffs") {
+                    if (i < (data.dq || 0)) statusClass = "direct-qualify";
+                    else if (i < ((data.dq || 0) + (data.pi || 0))) statusClass = "playin-qualify";
+                } else {
+                    statusClass = ""; // Normal league
+                }
+                html += `<tr class="${statusClass}"><td>${i+1}</td><td>${name}</td><td><b>${pts} PTS</b></td></tr>`;
+            });
+            html += `</table>`;
+        } 
+        
+        else if (view === 'matches') {
+            html = `<h3>Matches</h3>`;
+            (data.league || []).forEach(m => {
+                html += `<div class="match-card"><span>${m.t1}</span><b>${m.s1} - ${m.s2}</b><span>${m.t2}</span></div>`;
+            });
+        }
+
+        else if (view === 'playins') {
+            html = `<h3>Play-ins</h3>`;
+            (data.elim || []).forEach(m => {
+                html += `<div class="match-card" style="border-left: 5px solid #ffc107;"><span>${m.t1}</span><b>${m.s1} - ${m.s2}</b><span>${m.t2}</span></div>`;
+            });
+        }
+
+        else if (view === 'bracket') {
+            html = `<h3>Tournament Bracket</h3>`;
+            (data.ko || []).forEach(m => {
+                html += `<div class="match-card bracket-card"><span>${m.t1}</span><b>${m.s1} - ${m.s2}</b><span>${m.t2}</span></div>`;
+            });
+        }
+
+        content.innerHTML = html;
+
+        // 2. RENDER DYNAMIC BUTTONS
+        let navHtml = "";
+        if (data.type === "League") {
+            navHtml = `<button onclick="renderView('league')">League</button>
+                       <button onclick="renderView('matches')">Matches</button>`;
+        } else if (data.type === "Playoffs") {
+            navHtml = `<button onclick="renderView('bracket')">Bracket</button>`;
+        } else if (data.type === "League + Playoffs") {
+            navHtml = `<button onclick="renderView('league')">League</button>
+                       <button onclick="renderView('matches')">Matches</button>
+                       <button onclick="renderView('playins')">Play-ins</button>
+                       <button onclick="renderView('bracket')">Bracket</button>`;
+        }
+        nav.innerHTML = navHtml;
+    }
+</script>
+</body>
+</html>
+                                
